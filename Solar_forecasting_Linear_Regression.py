@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from simple_esn.simple_esn import SimpleESN
 
 def load_data(file_path):
     """Load dataset from Excel file."""
@@ -31,52 +31,61 @@ def prepare_features(df):
     features = ["Temperature Units", "Pressure Units", "Relative Humidity Units", "Wind Speed Units"]
     target = "Solar Power"
     required_columns = features + [target]
-    
+
     # Attempt to convert columns to numeric
     for col in required_columns:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
-    
+
     # Drop rows with missing values
     df = df.dropna(subset=required_columns)
-    
+
     # Check if any columns were excluded due to non-numeric data
     excluded_columns = [col for col in required_columns if df[col].dtype not in ['int64', 'float64']]
     if excluded_columns:
         print("❌ Excluded columns due to non-numeric data:", excluded_columns)
         return None, None
-    
+
     print("✅ Dataframe successfully filtered with required columns!")
-    
-    X = df[features]
-    y = df[target]
+
+    X = df[features].values
+    y = df[target].values
     return X, y
 
-def train_model(X, y):
-    """Train a Linear Regression model."""
+def train_esn_model(X, y):
+    """Train an Echo State Network and calculate regression metrics."""
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-    
-    y_pred = model.predict(X_test)
-    
+
+    # Initialize ESN
+    esn = SimpleESN(n_readout=100, n_components=200, random_state=42)
+
+    # Fit and predict
+    esn.fit(X_train, y_train)
+    y_pred = esn.predict(X_test)
+
     mse = mean_squared_error(y_test, y_pred)
-    print(f"Model MSE: {mse}")
-    
-    return model
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"ESN Model MSE: {mse:.4f}")
+    print(f"ESN Model MAE: {mae:.4f}")
+    print(f"ESN Model RMSE: {rmse:.4f}")
+    print(f"ESN Model R^2 (Coefficient of Determination): {r2:.4f}")
+
+    return esn
 
 def main():
     file_path = "Data_solar_on_27-04-2022.xlsx"
     df = load_data(file_path)
-    
+
     if df is not None:
         df = preprocess_data(df)
         inspect_data(df)
         X, y = prepare_features(df)
-        
+
         if X is not None and y is not None:
-            model = train_model(X, y)
+            model = train_esn_model(X, y)
 
 if __name__ == "__main__":
     main()
